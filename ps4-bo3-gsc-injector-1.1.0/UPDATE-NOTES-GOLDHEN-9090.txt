@@ -1,0 +1,7 @@
+Source changes to the original PS4 BO3 GSC Injector 1.1.0:
+- Port defaults changed to 9090.
+- Connect PS4 prompts for a custom .bin or .elf payload and sends its bytes to the selected IPv4:port.
+- Preserves original compiler, BO3 1.33 game selection, and GSC injection code.
+- No firmware 13.00-13.52 ps4debug payload is included or validated.
+- Attach BO3 still requires a compatible PS4Debug service running on the console; this is a payload-transfer update, not a replacement PS4DBG implementation.
+- Not compiled or tested on a physical PS4. Build in Visual Studio with the original .NET Framework 4.8 dependencies.
