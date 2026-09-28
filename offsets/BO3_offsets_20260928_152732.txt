@@ -1,0 +1,21 @@
+﻿# BO3 offsets - generated 2026-09-28 15:27:33
+# dump: BO3_CUSA02290_memory_20260928_151549  firmware: 13.50
+# keyword | region file | file offset | virtual address
+CookGobbleGumRecipe | region_0000_executable_400000_1920000.bin | 0x012F956B | 0x16F956B
+CookGobbleGumRecipe | region_0000_executable_400000_1920000.bin | 0x0130B7F2 | 0x170B7F2
+OnCookGobbleGumRecipe | region_0000_executable_400000_1920000.bin | 0x012F9569 | 0x16F9569
+LiquefyGobbleGum | region_0000_executable_400000_1920000.bin | 0x0130B806 | 0x170B806
+GetCurrentGobbleGumRecipeScheduleIndex | region_0000_executable_400000_1920000.bin | 0x01311803 | 0x1711803
+gumballMachineX | region_0000_executable_400000_1920000.bin | 0x012D856F | 0x16D856F
+gumballMachineY | region_0000_executable_400000_1920000.bin | 0x012D857F | 0x16D857F
+gumballMachineZ | region_0000_executable_400000_1920000.bin | 0x012D858F | 0x16D858F
+gumballMachineTimeDeciSeconds | region_0000_executable_400000_1920000.bin | 0x012D8551 | 0x16D8551
+gumballOffered | region_0000_executable_400000_1920000.bin | 0x012D859F | 0x16D859F
+gumballHolding | region_0000_executable_400000_1920000.bin | 0x012D85AE | 0x16D85AE
+gumballTaken | region_0000_executable_400000_1920000.bin | 0x012D85BD | 0x16D85BD
+gumballFiresale | region_0000_executable_400000_1920000.bin | 0x012D85D4 | 0x16D85D4
+CookGobbleGumRecipe | region_0002_executable_1A04000_FBAC000.bin | 0x091091F4 | 0xAB0D1F4
+CookGobbleGumRecipe | region_0002_executable_1A04000_FBAC000.bin | 0x09188586 | 0xAB8C586
+OnCookGobbleGumRecipe | region_0002_executable_1A04000_FBAC000.bin | 0x09188584 | 0xAB8C584
+LiquefyGobbleGum | region_0002_executable_1A04000_FBAC000.bin | 0x09109184 | 0xAB0D184
+GetCurrentGobbleGumRecipeScheduleIndex | region_0002_executable_1A04000_FBAC000.bin | 0x091153DC | 0xAB193DC
