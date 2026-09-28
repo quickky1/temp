@@ -305,6 +305,12 @@ namespace libdebug
 
         private byte[] ReceiveData(int length)
         {
+            // Fail fast on a garbage length from a desynced stream instead of
+            // trying to allocate gigabytes (that pattern produced "a new guard
+            // page for the stack cannot be created" on the PC side).
+            if (length < 0 || length > 256 * 1024 * 1024)
+                throw new IOException("Unreasonable data length from PS4 (" + length + " bytes); connection out of sync.");
+
             MemoryStream s = new MemoryStream();
 
             int left = length;

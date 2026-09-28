@@ -25,6 +25,8 @@ namespace PS4_BO3_GSC
 
         private void MainWindow_Load(object sender, EventArgs e)
         {
+            // Build stamp: proves which code is actually running on the PC.
+            this.Text = this.Text + " [build 2026-09-28e]";
             ps4IpTextBox.Text = Properties.Settings.Default.ps4ip;
             ps4PortTextBox.Text = Properties.Settings.Default.ps4Port;
             if (string.IsNullOrWhiteSpace(ps4PortTextBox.Text))
