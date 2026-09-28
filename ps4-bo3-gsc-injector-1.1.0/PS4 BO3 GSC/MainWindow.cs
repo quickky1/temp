@@ -302,7 +302,8 @@ namespace PS4_BO3_GSC
 
         // Asks a running PS4Debug-NG payload (port 744) for the console firmware.
         // Request: 12-byte header (magic 0xFFAABBCC, CMD_FW_VERSION 0xBD000500, datalen 0).
-        // Reply: uint16 firmware in BCD, e.g. 0x1350 -> "13.50", 0x900 -> "9.00".
+        // Reply: uint16 firmware as major*100+minor (NOT BCD), e.g. 900 -> "9.00",
+        // 1350 -> "13.50", 505 -> "5.05". Verified against debugger/source/fw.c.
         private static string QueryFirmwareVersion(string host)
         {
             using (Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
@@ -318,9 +319,11 @@ namespace PS4_BO3_GSC
                 SendAll(sock, request);
 
                 byte[] reply = ReceiveAll(sock, 2);
-                ushort bcd = BitConverter.ToUInt16(reply, 0);
-                int major = ((bcd >> 12) & 0xF) * 10 + ((bcd >> 8) & 0xF);
-                int minor = ((bcd >> 4) & 0xF) * 10 + (bcd & 0xF);
+                ushort raw = BitConverter.ToUInt16(reply, 0);
+                if (raw == 0xFFFF)
+                    throw new IOException("Payload could not determine the firmware version.");
+                int major = raw / 100;
+                int minor = raw % 100;
                 return major.ToString() + "." + minor.ToString("D2");
             }
         }
@@ -392,11 +395,39 @@ namespace PS4_BO3_GSC
             ps4.Notify(222, "Attached to BO3 - ready to dump!");
         }
 
+        private int FindBO3Pid()
+        {
+            // Re-resolve BO3's pid fresh every time: the pid captured when "Attach"
+            // was pressed goes stale if the game was restarted since.
+            foreach (libdebug.Process process in ps4.GetProcessList().processes)
+            {
+                if (process.name == "eboot.bin")
+                {
+                    attachedProcess = process;
+                    return process.pid;
+                }
+            }
+            throw new Exception("BO3 (eboot.bin) is not running. Start the game, press Attach BO3, then dump again.");
+        }
+
         private async void DumpMemoryButton_Click(object sender, EventArgs e)
         {
-            if (ps4 == null || attachedProcess == null || !ps4.IsConnected)
+            if (ps4 == null || !ps4.IsConnected)
             {
                 MessageBox.Show(this, "Send the payload and attach to BO3 first.", "Not attached", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int pid;
+            try
+            {
+                pid = FindBO3Pid();
+            }
+            catch (Exception ex)
+            {
+                connectionStatusLabel.Text = "Process Not Found";
+                connectionStatusLabel.ForeColor = Color.Red;
+                MessageBox.Show(this, ex.Message, "BO3 not found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -411,7 +442,7 @@ namespace PS4_BO3_GSC
 
                 try
                 {
-                    await Task.Run(() => DumpProcessMemory(root, attachedProcess.pid));
+                    await Task.Run(() => DumpProcessMemory(root, pid));
                     MessageBox.Show(this, "Dump finished. Send the created BO3_CUSA02290_memory_* folder (zip it first).\r\nSee dump_manifest.txt for captured and skipped ranges.", "Dump complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
@@ -429,7 +460,16 @@ namespace PS4_BO3_GSC
         {
             // PS4Debug-NG maps are virtual address ranges. Dump only mappings with the
             // read permission bit set; record failures instead of aborting the entire dump.
-            var map = ps4.GetProcessMaps(pid);
+            ProcessMap map;
+            try
+            {
+                map = ps4.GetProcessMaps(pid);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException("Could not read BO3's memory map from the payload: " + ex.Message +
+                    " (is the PS4Debug-NG payload still running on port 744?)", ex);
+            }
 
             string manifestPath = Path.Combine(outputDirectory, "dump_manifest.txt");
             using (var manifest = new StreamWriter(manifestPath, false, Encoding.UTF8))
@@ -445,12 +485,13 @@ namespace PS4_BO3_GSC
 
                 int regionIndex = 0;
                 const int chunkSize = 1024 * 1024;
+                const ulong maxSaneRegion = 16UL * 1024 * 1024 * 1024; // 16 GB sanity cap
 
                 foreach (var entry in map.entries)
                 {
                     if (entry == null || entry.end <= entry.start) continue;
 
-                    // FreeBSD/PS4 protection flags use bit 1 (PROT_READ) for readable mappings.
+                    // PS4/FreeBSD VM_PROT_READ = 0x1.
                     if ((entry.prot & 1) == 0)
                     {
                         manifest.WriteLine("SKIP no-read-protection name={0} start=0x{1:X} end=0x{2:X} prot=0x{3:X}", entry.name, entry.start, entry.end, entry.prot);
@@ -458,6 +499,12 @@ namespace PS4_BO3_GSC
                     }
 
                     ulong length = entry.end - entry.start;
+                    if (length > maxSaneRegion)
+                    {
+                        manifest.WriteLine("SKIP insane-region-size name={0} start=0x{1:X} end=0x{2:X} length={3} prot=0x{4:X}", entry.name, entry.start, entry.end, length, entry.prot);
+                        continue;
+                    }
+
                     string safeName = String.Concat((entry.name ?? "mapping").Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
                     if (String.IsNullOrWhiteSpace(safeName)) safeName = "mapping";
                     string fileName = String.Format("region_{0:D4}_{1}_{2:X}_{3:X}.bin", regionIndex++, safeName, entry.start, entry.end);
@@ -468,22 +515,35 @@ namespace PS4_BO3_GSC
 
                     using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, chunkSize))
                     {
-                        for (ulong offset = 0; offset < length; offset += chunkSize)
+                        for (ulong offset = 0; offset < length; offset += (ulong)chunkSize)
                         {
                             int count = (int)Math.Min((ulong)chunkSize, length - offset);
-                            try
+                            byte[] bytes = null;
+                            Exception lastError = null;
+                            // Retry transient read failures before zero-filling the chunk.
+                            for (int attempt = 0; attempt < 3 && bytes == null; attempt++)
                             {
-                                byte[] bytes = ps4.ReadMemory(pid, entry.start + offset, count);
-                                if (bytes == null || bytes.Length != count) throw new IOException("Short read");
+                                try
+                                {
+                                    byte[] chunk = ps4.ReadMemory(pid, entry.start + offset, count);
+                                    if (chunk == null || chunk.Length != count) throw new IOException("Short read");
+                                    bytes = chunk;
+                                }
+                                catch (Exception readEx)
+                                {
+                                    lastError = readEx;
+                                }
+                            }
+                            if (bytes != null)
+                            {
                                 fs.Write(bytes, 0, bytes.Length);
                             }
-                            catch (Exception readEx)
+                            else
                             {
                                 // Preserve address-to-file alignment by zero-filling failed reads.
                                 fs.Write(new byte[count], 0, count);
                                 failedBytes += count;
-                                lock (manifest)
-                                    manifest.WriteLine("READ-FAIL file={0} address=0x{1:X} length={2} error={3}", fileName, entry.start + offset, count, readEx.Message.Replace("\r", " ").Replace("\n", " "));
+                                manifest.WriteLine("READ-FAIL file={0} address=0x{1:X} length={2} error={3}", fileName, entry.start + offset, count, (lastError != null ? lastError.Message : "unknown").Replace("\r", " ").Replace("\n", " "));
                             }
                             written += count;
                         }
@@ -502,5 +562,4 @@ namespace PS4_BO3_GSC
             Button btn = (Button)sender;
             btn.BackColor = Color.FromArgb(211, 211, 211);
         }
-    }
-}
+ 

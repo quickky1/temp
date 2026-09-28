@@ -54,7 +54,7 @@ namespace libdebug
 
             // recv count
             byte[] bytes = new byte[4];
-            ReceiveExactly(bytes, 4);
+            sock.Receive(bytes, 4, SocketFlags.None);
             int number = BitConverter.ToInt32(bytes, 0);
 
             // recv data
@@ -398,7 +398,7 @@ namespace libdebug
 
             // recv count
             byte[] bnumber = new byte[4];
-            ReceiveExactly(bnumber, 4);
+            sock.Receive(bnumber, 4, SocketFlags.None);
             int number = BitConverter.ToInt32(bnumber, 0);
 
             // recv data
