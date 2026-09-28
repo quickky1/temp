@@ -56,6 +56,8 @@ namespace libdebug
             byte[] bytes = new byte[4];
             ReceiveExactly(bytes, 4);
             int number = BitConverter.ToInt32(bytes, 0);
+            if (number < 0 || number > 100000)
+                throw new IOException("Unreasonable process count from PS4 (" + number + "); connection out of sync.");
 
             // recv data
             byte[] data = ReceiveData(number * PROC_LIST_ENTRY_SIZE);
@@ -400,6 +402,8 @@ namespace libdebug
             byte[] bnumber = new byte[4];
             ReceiveExactly(bnumber, 4);
             int number = BitConverter.ToInt32(bnumber, 0);
+            if (number < 0 || number > 200000)
+                throw new IOException("Unreasonable map count from PS4 (" + number + "); connection out of sync.");
 
             // recv data
             byte[] data = ReceiveData(number * PROC_MAP_ENTRY_SIZE);
