@@ -36,12 +36,12 @@ namespace PS4_BO3_GSC
         // Prefer the supplied PS4Debug-NG payload. If it is not beside the app, allow selecting a compatible payload manually.
         private string choosePayloadFile()
         {
-            string bundled = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Payloads", "GoldHEN-13.50", "ps4debug-ng_v1.3.2_release_2026-09-20.bin");
+            string bundled = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Payloads", "ps4debug-ng_v1.3.2_release_2026-09-20.bin");
 
             if (File.Exists(bundled) && new FileInfo(bundled).Length > 0)
             {
                 var result = MetroFramework.MetroMessageBox.Show(this,
-                    "Use the bundled PS4Debug-NG v1.3.2 payload?\r\n\r\n" + bundled + "\r\n\r\nThis payload documents support for PS4 firmware 13.50. Sending it to GoldHEN's listener does not guarantee it starts; check the PS4 notification and then attach.",
+                    "Use the bundled PS4Debug-NG v1.3.2 payload?\r\n\r\n" + bundled + "\r\n\r\nThis payload auto-detects the PS4 firmware when it loads (supports 3.xx - 13.xx). Sending it to GoldHEN's listener does not guarantee it starts; check the PS4 notification and then attach.",
                     "Send bundled PS4Debug-NG payload", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 
                 if (result == DialogResult.Yes) return bundled;
@@ -168,6 +168,98 @@ namespace PS4_BO3_GSC
             }
         }
 
+        private void detectFirmwareButton_Click(object sender, EventArgs e)
+        {
+            string host = ps4IpTextBox.Text.Trim();
+            IPAddress address;
+
+            if (!IPAddress.TryParse(host, out address) || address.AddressFamily != AddressFamily.InterNetwork)
+            {
+                connectionStatusLabel.Text = "Invalid PS4 IP";
+                connectionStatusLabel.ForeColor = Color.Red;
+                MetroFramework.MetroMessageBox.Show(this, "Enter the PS4 IPv4 address.", "Invalid IP", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string firmware;
+            try
+            {
+                firmware = QueryFirmwareVersion(host);
+            }
+            catch (Exception ex)
+            {
+                connectionStatusLabel.Text = "Firmware detect failed";
+                connectionStatusLabel.ForeColor = Color.Red;
+                MetroFramework.MetroMessageBox.Show(this,
+                    "Could not read the firmware from the PS4 (port 744).\r\n\r\n" + ex.Message + "\r\n\r\nSend the payload first and confirm the PS4 shows its notification, then try Detect Firmware again.",
+                    "Firmware detection failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (!firmwareComboBox.Items.Contains(firmware))
+                firmwareComboBox.Items.Add(firmware);
+            firmwareComboBox.SelectedItem = firmware;
+
+            connectionStatusLabel.Text = "Firmware: " + firmware;
+            connectionStatusLabel.ForeColor = Color.Green;
+        }
+
+        private string GetSelectedFirmware()
+        {
+            if (firmwareComboBox != null && firmwareComboBox.SelectedItem != null)
+                return firmwareComboBox.SelectedItem.ToString();
+            return "unknown (not detected)";
+        }
+
+        // Asks a running PS4Debug-NG payload (port 744) for the console firmware.
+        // Request: 12-byte header (magic 0xFFAABBCC, CMD_FW_VERSION 0xBD000500, datalen 0).
+        // Reply: uint16 firmware in BCD, e.g. 0x1350 -> "13.50", 0x900 -> "9.00".
+        private static string QueryFirmwareVersion(string host)
+        {
+            using (Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                sock.ReceiveTimeout = 4000;
+                sock.SendTimeout = 4000;
+                sock.Connect(new IPEndPoint(IPAddress.Parse(host), 744));
+
+                byte[] request = new byte[12];
+                BitConverter.GetBytes(0xFFAABBCCu).CopyTo(request, 0);
+                BitConverter.GetBytes(0xBD000500u).CopyTo(request, 4);
+                BitConverter.GetBytes(0u).CopyTo(request, 8);
+                SendAll(sock, request);
+
+                byte[] reply = ReceiveAll(sock, 2);
+                ushort bcd = BitConverter.ToUInt16(reply, 0);
+                int major = ((bcd >> 12) & 0xF) * 10 + ((bcd >> 8) & 0xF);
+                int minor = ((bcd >> 4) & 0xF) * 10 + (bcd & 0xF);
+                return major.ToString() + "." + minor.ToString("D2");
+            }
+        }
+
+        private static void SendAll(Socket sock, byte[] buffer)
+        {
+            int offset = 0;
+            while (offset < buffer.Length)
+            {
+                int sent = sock.Send(buffer, offset, buffer.Length - offset, SocketFlags.None);
+                if (sent <= 0) throw new IOException("Connection closed while sending.");
+                offset += sent;
+            }
+        }
+
+        private static byte[] ReceiveAll(Socket sock, int count)
+        {
+            byte[] buffer = new byte[count];
+            int offset = 0;
+            while (offset < count)
+            {
+                int received = sock.Receive(buffer, offset, count - offset, SocketFlags.None);
+                if (received <= 0) throw new IOException("Connection closed before the reply arrived.");
+                offset += received;
+            }
+            return buffer;
+        }
+
         private void attachBo3Button_Click(object sender, EventArgs e)
         {
             try
@@ -181,7 +273,6 @@ namespace PS4_BO3_GSC
                 connectionStatusLabel.ForeColor = Color.Red;
                 return;
             }
-
             if (!ps4.IsConnected)
             {
                 connectionStatusLabel.Text = "Connection Failed";
@@ -257,6 +348,7 @@ namespace PS4_BO3_GSC
                 manifest.WriteLine("BO3 process memory dump");
                 manifest.WriteLine("Process: eboot.bin");
                 manifest.WriteLine("PID: " + pid);
+                manifest.WriteLine("PS4 firmware: " + GetSelectedFirmware());
                 manifest.WriteLine("Created: " + DateTime.Now.ToString("O"));
                 manifest.WriteLine("PS4Debug-NG readable mappings only; chunk read failures are marked as gaps.");
                 manifest.WriteLine("Address ranges are virtual addresses. Files are raw bytes, one file per mapping, with unreadable chunks zero-filled and described below.");

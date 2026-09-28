@@ -32,6 +32,9 @@ namespace PS4_BO3_GSC
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainWindow));
             this.styleManager = new MetroFramework.Components.MetroStyleManager(this.components);
             this.connectionGroupBox = new System.Windows.Forms.GroupBox();
+            this.detectFirmwareButton = new System.Windows.Forms.Button();
+            this.firmwareComboBox = new MetroFramework.Controls.MetroComboBox();
+            this.firmwareLabel = new MetroFramework.Controls.MetroLabel();
             this.attachBo3Button = new System.Windows.Forms.Button();
             this.connectPS4Button = new System.Windows.Forms.Button();
             this.ps4PortTextBox = new MetroFramework.Controls.MetroTextBox();
@@ -58,6 +61,9 @@ namespace PS4_BO3_GSC
             // connectionGroupBox
             //
             this.connectionGroupBox.BackColor = System.Drawing.Color.Transparent;
+            this.connectionGroupBox.Controls.Add(this.detectFirmwareButton);
+            this.connectionGroupBox.Controls.Add(this.firmwareComboBox);
+            this.connectionGroupBox.Controls.Add(this.firmwareLabel);
             this.connectionGroupBox.Controls.Add(this.attachBo3Button);
             this.connectionGroupBox.Controls.Add(this.connectPS4Button);
             this.connectionGroupBox.Controls.Add(this.ps4PortTextBox);
@@ -67,10 +73,68 @@ namespace PS4_BO3_GSC
             this.connectionGroupBox.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(124)))), ((int)(((byte)(65)))), ((int)(((byte)(153)))));
             this.connectionGroupBox.Location = new System.Drawing.Point(24, 64);
             this.connectionGroupBox.Name = "connectionGroupBox";
-            this.connectionGroupBox.Size = new System.Drawing.Size(412, 112);
+            this.connectionGroupBox.Size = new System.Drawing.Size(412, 150);
             this.connectionGroupBox.TabIndex = 0;
             this.connectionGroupBox.TabStop = false;
             this.connectionGroupBox.Text = "Connection";
+            //
+            // detectFirmwareButton
+            //
+            this.detectFirmwareButton.BackColor = System.Drawing.Color.Black;
+            this.detectFirmwareButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.detectFirmwareButton.Location = new System.Drawing.Point(216, 96);
+            this.detectFirmwareButton.Name = "detectFirmwareButton";
+            this.detectFirmwareButton.Size = new System.Drawing.Size(120, 30);
+            this.detectFirmwareButton.TabIndex = 7;
+            this.detectFirmwareButton.Text = "Detect Firmware";
+            this.detectFirmwareButton.UseVisualStyleBackColor = false;
+            this.detectFirmwareButton.Click += new System.EventHandler(this.detectFirmwareButton_Click);
+            //
+            // firmwareComboBox
+            //
+            this.firmwareComboBox.FormattingEnabled = true;
+            this.firmwareComboBox.ItemHeight = 23;
+            this.firmwareComboBox.Items.AddRange(new object[] {
+            "9.00",
+            "9.05",
+            "9.20",
+            "9.40",
+            "9.60",
+            "10.00",
+            "10.01",
+            "10.20",
+            "10.40",
+            "10.60",
+            "11.00",
+            "11.20",
+            "11.40",
+            "11.60",
+            "12.00",
+            "12.02",
+            "12.20",
+            "12.40",
+            "12.60",
+            "12.70",
+            "13.00",
+            "13.20",
+            "13.40",
+            "13.42",
+            "13.60"});
+            this.firmwareComboBox.Location = new System.Drawing.Point(76, 98);
+            this.firmwareComboBox.Name = "firmwareComboBox";
+            this.firmwareComboBox.Size = new System.Drawing.Size(120, 29);
+            this.firmwareComboBox.TabIndex = 6;
+            this.firmwareComboBox.UseSelectable = true;
+            //
+            // firmwareLabel
+            //
+            this.firmwareLabel.AutoSize = true;
+            this.firmwareLabel.Location = new System.Drawing.Point(6, 100);
+            this.firmwareLabel.Name = "firmwareLabel";
+            this.firmwareLabel.Size = new System.Drawing.Size(68, 19);
+            this.firmwareLabel.TabIndex = 8;
+            this.firmwareLabel.Text = "Firmware:";
+            this.firmwareLabel.UseStyleColors = true;
             //
             // attachBo3Button
             //
@@ -185,7 +249,7 @@ namespace PS4_BO3_GSC
             this.statusGroupBox.Controls.Add(this.connectionStatusLabel);
             this.statusGroupBox.Controls.Add(this.staticStatusLabel);
             this.statusGroupBox.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(124)))), ((int)(((byte)(65)))), ((int)(((byte)(153)))));
-            this.statusGroupBox.Location = new System.Drawing.Point(24, 185);
+            this.statusGroupBox.Location = new System.Drawing.Point(24, 223);
             this.statusGroupBox.Name = "statusGroupBox";
             this.statusGroupBox.Size = new System.Drawing.Size(412, 56);
             this.statusGroupBox.TabIndex = 1;
@@ -221,7 +285,7 @@ namespace PS4_BO3_GSC
             this.dumpGroupBox.BackColor = System.Drawing.Color.Transparent;
             this.dumpGroupBox.Controls.Add(this.dumpMemoryButton);
             this.dumpGroupBox.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(124)))), ((int)(((byte)(65)))), ((int)(((byte)(153)))));
-            this.dumpGroupBox.Location = new System.Drawing.Point(24, 250);
+            this.dumpGroupBox.Location = new System.Drawing.Point(24, 288);
             this.dumpGroupBox.Name = "dumpGroupBox";
             this.dumpGroupBox.Size = new System.Drawing.Size(412, 90);
             this.dumpGroupBox.TabIndex = 2;
@@ -246,7 +310,7 @@ namespace PS4_BO3_GSC
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(460, 360);
+            this.ClientSize = new System.Drawing.Size(460, 398);
             this.Controls.Add(this.dumpGroupBox);
             this.Controls.Add(this.statusGroupBox);
             this.Controls.Add(this.connectionGroupBox);
@@ -272,6 +336,9 @@ namespace PS4_BO3_GSC
 
         private MetroFramework.Components.MetroStyleManager styleManager;
         private System.Windows.Forms.GroupBox connectionGroupBox;
+        private System.Windows.Forms.Button detectFirmwareButton;
+        private MetroFramework.Controls.MetroComboBox firmwareComboBox;
+        private MetroFramework.Controls.MetroLabel firmwareLabel;
         private System.Windows.Forms.Button attachBo3Button;
         private System.Windows.Forms.Button connectPS4Button;
         private MetroFramework.Controls.MetroTextBox ps4PortTextBox;
