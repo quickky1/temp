@@ -21,12 +21,38 @@ namespace PS4_BO3_GSC
         public MainWindow()
         {
             InitializeComponent();
+            // Temporary crash diagnostics for the "guard page" stack overflow:
+            // log every milestone of the send path, and capture the managed
+            // stack if the process dies.
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                try
+                {
+                    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                        "crash_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".log"),
+                        "Time: " + DateTime.Now.ToString("O") + "\r\nIsTerminating: " + e.IsTerminating +
+                        "\r\n\r\nException:\r\n" + e.ExceptionObject +
+                        "\r\n\r\nStack at teardown:\r\n" + Environment.StackTrace + "\r\n");
+                }
+                catch { }
+            };
+        }
+
+        private static void DiagLog(string msg)
+        {
+            try
+            {
+                File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "send_diag.log"),
+                    DateTime.Now.ToString("HH:mm:ss.fff") + " " + msg + "\r\n");
+            }
+            catch { }
         }
 
         private void MainWindow_Load(object sender, EventArgs e)
         {
             // Build stamp: proves which code is actually running on the PC.
-            this.Text = this.Text + " [build 2026-09-28e]";
+            this.Text = this.Text + " [build 2026-09-28f]";
+            DiagLog("MainWindow_Load");
             ps4IpTextBox.Text = Properties.Settings.Default.ps4ip;
             ps4PortTextBox.Text = Properties.Settings.Default.ps4Port;
             if (string.IsNullOrWhiteSpace(ps4PortTextBox.Text))
@@ -88,6 +114,7 @@ namespace PS4_BO3_GSC
 
         private async void connectPS4Button_Click(object sender, EventArgs e)
         {
+            DiagLog("send-click: start");
             string host = ps4IpTextBox.Text.Trim();
             string portText = ps4PortTextBox.Text.Trim();
             IPAddress address;
@@ -110,6 +137,7 @@ namespace PS4_BO3_GSC
             }
 
             string payloadPath = choosePayloadFile();
+            DiagLog("send-click: payload chosen: " + (payloadPath ?? "<null>"));
             if (string.IsNullOrEmpty(payloadPath))
             {
                 connectionStatusLabel.Text = "Payload selection cancelled";
@@ -127,7 +155,9 @@ namespace PS4_BO3_GSC
             Cursor = Cursors.WaitCursor;
             try
             {
+                DiagLog("send-click: before Task.Run");
                 SendResult result = await Task.Run(() => SendPayloadAndVerify(host, port, payloadPath));
+                DiagLog("send-click: after await, result=" + (result != null ? result.Title : "<null>"));
                 connectionStatusLabel.Text = result.StatusText;
                 connectionStatusLabel.ForeColor = result.StatusColor;
                 MetroFramework.MetroMessageBox.Show(this, result.Message, result.Title, MessageBoxButtons.OK, result.Icon);
@@ -153,23 +183,30 @@ namespace PS4_BO3_GSC
         // the payload is actually listening on the PS4Debug port (744).
         private SendResult SendPayloadAndVerify(string host, int port, string payloadPath)
         {
+            DiagLog("send: enter SendPayloadAndVerify");
             string fileName = Path.GetFileName(payloadPath);
             bool fullySent = false;
             string sendError = null;
 
             try
             {
+                DiagLog("send: creating socket");
                 using (var sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
                 {
                     sock.ReceiveTimeout = 8000;
                     sock.SendTimeout = 30000;
+                    DiagLog("send: BeginConnect " + host + ":" + port);
                     var connect = sock.BeginConnect(host, port, null, null);
+                    DiagLog("send: waiting for connect");
                     if (!connect.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(8)))
                         throw new IOException("Timed out connecting to " + host + ":" + port + ".");
+                    DiagLog("send: EndConnect");
                     sock.EndConnect(connect);
+                    DiagLog("send: connected, opening file");
 
                     using (var stream = new FileStream(payloadPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                     {
+                        DiagLog("send: file size=" + stream.Length);
                         byte[] chunk = new byte[65536];
                         int count;
                         while ((count = stream.Read(chunk, 0, chunk.Length)) > 0)
@@ -183,6 +220,7 @@ namespace PS4_BO3_GSC
                             }
                         }
                     }
+                    DiagLog("send: all bytes sent");
                     fullySent = true;
                     try { sock.Shutdown(SocketShutdown.Send); }
                     catch { /* GoldHEN usually closes first once it has the bytes; ignore */ }
@@ -207,6 +245,7 @@ namespace PS4_BO3_GSC
             }
 
             // All bytes left the PC. Give the payload a moment to start, then check 744.
+            DiagLog("send: probe loop start");
             bool listening = false;
             DateTime deadline = DateTime.UtcNow.AddSeconds(15);
             while (DateTime.UtcNow < deadline)
@@ -214,6 +253,7 @@ namespace PS4_BO3_GSC
                 if (IsPayloadListening(host)) { listening = true; break; }
                 Thread.Sleep(1000);
             }
+            DiagLog("send: probe loop end, listening=" + listening);
 
             if (listening)
             {

@@ -17,42 +17,36 @@ namespace PS4_BO3_GSC
     {
         private PS4DBG ps4;
         private Process attachedProcess;
+        public static Socket _psocket;
+        public static bool pDConnected;
 
         public MainWindow()
         {
             InitializeComponent();
-            // Temporary crash diagnostics for the "guard page" stack overflow:
-            // log every milestone of the send path, and capture the managed
-            // stack if the process dies.
-            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
-            {
-                try
-                {
-                    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                        "crash_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".log"),
-                        "Time: " + DateTime.Now.ToString("O") + "\r\nIsTerminating: " + e.IsTerminating +
-                        "\r\n\r\nException:\r\n" + e.ExceptionObject +
-                        "\r\n\r\nStack at teardown:\r\n" + Environment.StackTrace + "\r\n");
-                }
-                catch { }
-            };
         }
 
-        private static void DiagLog(string msg)
+        public static bool Connect2PS4(string ip, string port)
         {
             try
             {
-                File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "send_diag.log"),
-                    DateTime.Now.ToString("HH:mm:ss.fff") + " " + msg + "\r\n");
+                _psocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                _psocket.ReceiveTimeout = 3000;
+                _psocket.SendTimeout = 3000;
+                _psocket.Connect(new IPEndPoint(IPAddress.Parse(ip), Int32.Parse(port)));
+                pDConnected = true;
+                return true;
             }
-            catch { }
+            catch (Exception)
+            {
+                pDConnected = false;
+                return false;
+            }
         }
 
         private void MainWindow_Load(object sender, EventArgs e)
         {
             // Build stamp: proves which code is actually running on the PC.
-            this.Text = this.Text + " [build 2026-09-28f]";
-            DiagLog("MainWindow_Load");
+            this.Text = this.Text + " [build 2026-09-28g]";
             ps4IpTextBox.Text = Properties.Settings.Default.ps4ip;
             ps4PortTextBox.Text = Properties.Settings.Default.ps4Port;
             if (string.IsNullOrWhiteSpace(ps4PortTextBox.Text))
@@ -112,14 +106,12 @@ namespace PS4_BO3_GSC
             }
         }
 
-        private async void connectPS4Button_Click(object sender, EventArgs e)
+        private void connectPS4Button_Click(object sender, EventArgs e)
         {
-            DiagLog("send-click: start");
             string host = ps4IpTextBox.Text.Trim();
             string portText = ps4PortTextBox.Text.Trim();
             IPAddress address;
             int port;
-
             if (!IPAddress.TryParse(host, out address) || address.AddressFamily != AddressFamily.InterNetwork)
             {
                 connectionStatusLabel.Text = "Invalid PS4 IP";
@@ -127,7 +119,6 @@ namespace PS4_BO3_GSC
                 MetroFramework.MetroMessageBox.Show(this, "Enter the PS4 IPv4 address.", "Invalid IP", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-
             if (!int.TryParse(portText, out port) || port < 1 || port > 65535)
             {
                 connectionStatusLabel.Text = "Invalid port";
@@ -137,7 +128,6 @@ namespace PS4_BO3_GSC
             }
 
             string payloadPath = choosePayloadFile();
-            DiagLog("send-click: payload chosen: " + (payloadPath ?? "<null>"));
             if (string.IsNullOrEmpty(payloadPath))
             {
                 connectionStatusLabel.Text = "Payload selection cancelled";
@@ -149,154 +139,47 @@ namespace PS4_BO3_GSC
             Properties.Settings.Default.ps4Port = port.ToString();
             Properties.Settings.Default.Save();
 
-            connectionStatusLabel.Text = "Sending payload...";
-            connectionStatusLabel.ForeColor = Color.DarkOrange;
-            connectPS4Button.Enabled = false;
-            Cursor = Cursors.WaitCursor;
+            // Synchronous send, same as the proven working build: no Task.Run,
+            // no BeginConnect, and the Send button is never disabled (disabling
+            // it crashed the process on this machine with a stack overflow).
             try
             {
-                DiagLog("send-click: before Task.Run");
-                SendResult result = await Task.Run(() => SendPayloadAndVerify(host, port, payloadPath));
-                DiagLog("send-click: after await, result=" + (result != null ? result.Title : "<null>"));
-                connectionStatusLabel.Text = result.StatusText;
-                connectionStatusLabel.ForeColor = result.StatusColor;
-                MetroFramework.MetroMessageBox.Show(this, result.Message, result.Title, MessageBoxButtons.OK, result.Icon);
-            }
-            finally
-            {
-                Cursor = Cursors.Default;
-                connectPS4Button.Enabled = true;
-            }
-        }
-
-        private sealed class SendResult
-        {
-            public string Title;
-            public string Message;
-            public MessageBoxIcon Icon;
-            public string StatusText;
-            public Color StatusColor;
-        }
-
-        // Sends the payload, tolerating GoldHEN's habit of closing the connection
-        // right after receiving (which used to look like a failure), then verifies
-        // the payload is actually listening on the PS4Debug port (744).
-        private SendResult SendPayloadAndVerify(string host, int port, string payloadPath)
-        {
-            DiagLog("send: enter SendPayloadAndVerify");
-            string fileName = Path.GetFileName(payloadPath);
-            bool fullySent = false;
-            string sendError = null;
-
-            try
-            {
-                DiagLog("send: creating socket");
-                using (var sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+                connectionStatusLabel.Text = "Sending payload bytes...";
+                connectionStatusLabel.ForeColor = Color.DarkOrange;
+                if (!Connect2PS4(host, port.ToString())) throw new IOException("Could not connect to the payload listener.");
+                using (var stream = new FileStream(payloadPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    sock.ReceiveTimeout = 8000;
-                    sock.SendTimeout = 30000;
-                    DiagLog("send: BeginConnect " + host + ":" + port);
-                    var connect = sock.BeginConnect(host, port, null, null);
-                    DiagLog("send: waiting for connect");
-                    if (!connect.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(8)))
-                        throw new IOException("Timed out connecting to " + host + ":" + port + ".");
-                    DiagLog("send: EndConnect");
-                    sock.EndConnect(connect);
-                    DiagLog("send: connected, opening file");
-
-                    using (var stream = new FileStream(payloadPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    byte[] chunk = new byte[65536];
+                    int count;
+                    while ((count = stream.Read(chunk, 0, chunk.Length)) > 0)
                     {
-                        DiagLog("send: file size=" + stream.Length);
-                        byte[] chunk = new byte[65536];
-                        int count;
-                        while ((count = stream.Read(chunk, 0, chunk.Length)) > 0)
+                        int offset = 0;
+                        while (offset < count)
                         {
-                            int offset = 0;
-                            while (offset < count)
-                            {
-                                int sent = sock.Send(chunk, offset, count - offset, SocketFlags.None);
-                                if (sent <= 0) throw new IOException("Connection closed before the full payload was sent.");
-                                offset += sent;
-                            }
+                            int sent = _psocket.Send(chunk, offset, count - offset, SocketFlags.None);
+                            if (sent <= 0) throw new IOException("Connection closed before the full payload was sent.");
+                            offset += sent;
                         }
                     }
-                    DiagLog("send: all bytes sent");
-                    fullySent = true;
-                    try { sock.Shutdown(SocketShutdown.Send); }
-                    catch { /* GoldHEN usually closes first once it has the bytes; ignore */ }
                 }
+                // All bytes confirmed sent. GoldHEN closes the connection the
+                // moment it has the full payload, so a Shutdown failure here
+                // is expected and not an error.
+                try { _psocket.Shutdown(SocketShutdown.Send); } catch { }
+                try { _psocket.Close(); } catch { }
+                pDConnected = false;
+                connectionStatusLabel.Text = "Payload bytes sent — verify on PS4";
+                connectionStatusLabel.ForeColor = Color.YellowGreen;
+                MetroFramework.MetroMessageBox.Show(this, "Payload bytes were sent. This confirms transfer only, not payload execution or firmware compatibility. Check the PS4's status, then use Attach BO3.", "Transfer complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch (Exception ex)
+            catch (Exception err)
             {
-                sendError = ex.Message;
+                try { if (_psocket != null) _psocket.Close(); } catch { }
+                pDConnected = false;
+                connectionStatusLabel.Text = "Payload transfer failed";
+                connectionStatusLabel.ForeColor = Color.Red;
+                MetroFramework.MetroMessageBox.Show(this, err.Message, "Payload transfer failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-
-            if (!fullySent)
-            {
-                return new SendResult
-                {
-                    Title = "Payload transfer failed",
-                    Message = "Could not send " + fileName + " to " + host + ":" + port + ".\n\n" + sendError +
-                              "\n\nCheck: PS4 on and jailbroken, GoldHEN BinLoader enabled, IP correct, same network.",
-                    Icon = MessageBoxIcon.Error,
-                    StatusText = "Payload transfer failed",
-                    StatusColor = Color.Red
-                };
-            }
-
-            // All bytes left the PC. Give the payload a moment to start, then check 744.
-            DiagLog("send: probe loop start");
-            bool listening = false;
-            DateTime deadline = DateTime.UtcNow.AddSeconds(15);
-            while (DateTime.UtcNow < deadline)
-            {
-                if (IsPayloadListening(host)) { listening = true; break; }
-                Thread.Sleep(1000);
-            }
-            DiagLog("send: probe loop end, listening=" + listening);
-
-            if (listening)
-            {
-                string firmware = null;
-                try { firmware = QueryFirmwareVersion(host); }
-                catch { /* classic 5.05-7.55 payloads don't answer the firmware query */ }
-
-                return new SendResult
-                {
-                    Title = "Payload running",
-                    Message = fileName + " was received and the payload is answering on port 744" +
-                              (firmware != null ? " (firmware " + firmware + ")" : "") +
-                              ".\n\nYou can attach now.",
-                    Icon = MessageBoxIcon.Information,
-                    StatusText = "Payload running" + (firmware != null ? " (FW " + firmware + ")" : ""),
-                    StatusColor = Color.Green
-                };
-            }
-
-            return new SendResult
-            {
-                Title = "Sent, not confirmed",
-                Message = "All bytes of " + fileName + " were sent to " + host + ":" + port +
-                          ", but nothing is answering on port 744 yet.\n\nCheck the PS4 notification: if the payload didn't start, wait a few seconds and press Detect Firmware, or resend.",
-                Icon = MessageBoxIcon.Warning,
-                StatusText = "Sent - payload not answering",
-                StatusColor = Color.DarkOrange
-            };
-        }
-
-        private bool IsPayloadListening(string host)
-        {
-            try
-            {
-                using (var sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
-                {
-                    var connect = sock.BeginConnect(host, 744, null, null);
-                    if (!connect.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(2))) return false;
-                    sock.EndConnect(connect);
-                    return true;
-                }
-            }
-            catch { return false; }
         }
 
         private void detectFirmwareButton_Click(object sender, EventArgs e)
