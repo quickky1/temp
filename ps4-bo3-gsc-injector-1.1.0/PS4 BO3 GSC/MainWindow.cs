@@ -1,20 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
+using System;
 using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using MetroFramework.Forms;
 using libdebug;
-using TreyarchCompiler;
-using TreyarchCompiler.Utilities;
 
 namespace PS4_BO3_GSC
 {
@@ -22,10 +16,9 @@ namespace PS4_BO3_GSC
     {
         public static Socket _psocket;
         public static bool pDConnected;
+
         private PS4DBG ps4;
         private Process attachedProcess;
-        private Enums.GameVersion selectedGameVersion = Enums.GameVersion.OneThreeThree;
-        private Enums.ConsoleVersion selectedConsoleVersion = Enums.ConsoleVersion.fiveOFive;
 
         public MainWindow()
         {
@@ -34,72 +27,52 @@ namespace PS4_BO3_GSC
 
         private void MainWindow_Load(object sender, EventArgs e)
         {
-            var ps4Ip = Properties.Settings.Default.ps4ip;
-            var ps4Port = Properties.Settings.Default.ps4Port;
-            ps4IpTextBox.Text = ps4Ip;
-            ps4PortTextBox.Text = ps4Port;
-            updateSelectedConsoleVersion();
-        }
-
-        private void updateSelectedConsoleVersion()
-        {
-            var savedVersion = (Enums.ConsoleVersion)Properties.Settings.Default.ps4Version;
-            selectedConsoleVersion = savedVersion;
-            if (savedVersion == Enums.ConsoleVersion.fiveOFive)
-                fiveOFiveRadioButton.Checked = true;
-            else if (savedVersion == Enums.ConsoleVersion.sixSevenTwo)
-                sixSevenTwoRadioButton.Checked = true;
-            else if (savedVersion == Enums.ConsoleVersion.sevenOTwo)
-                sevenOTwoRadioButton.Checked = true;
-            else if (savedVersion == Enums.ConsoleVersion.sevenFiveFive)
-                sevenFiveFiveRadioButton.Checked = true;
-            else if (savedVersion == Enums.ConsoleVersion.firmware1300)
-                firmware1300RadioButton.Checked = true;
-            else if (savedVersion == Enums.ConsoleVersion.firmware1302)
-                firmware1302RadioButton.Checked = true;
-            else if (savedVersion == Enums.ConsoleVersion.firmware1350)
-                firmware1350RadioButton.Checked = true;
-            else if (savedVersion == Enums.ConsoleVersion.firmware1352)
-                firmware1352RadioButton.Checked = true;
-            else
-            {
-                fiveOFiveRadioButton.Checked = true;
-                updateConsoleVersion(Enums.ConsoleVersion.fiveOFive);
-            }
+            ps4IpTextBox.Text = Properties.Settings.Default.ps4ip;
+            ps4PortTextBox.Text = Properties.Settings.Default.ps4Port;
+            if (string.IsNullOrWhiteSpace(ps4PortTextBox.Text))
+                ps4PortTextBox.Text = "9090";
         }
 
         // Prefer the supplied PS4Debug-NG payload. If it is not beside the app, allow selecting a compatible payload manually.
         private string choosePayloadFile()
         {
             string bundled = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Payloads", "GoldHEN-13.50", "ps4debug-ng_v1.3.2_release_2026-09-20.bin");
+
             if (File.Exists(bundled) && new FileInfo(bundled).Length > 0)
             {
                 var result = MetroFramework.MetroMessageBox.Show(this,
                     "Use the bundled PS4Debug-NG v1.3.2 payload?\r\n\r\n" + bundled + "\r\n\r\nThis payload documents support for PS4 firmware 13.50. Sending it to GoldHEN's listener does not guarantee it starts; check the PS4 notification and then attach.",
                     "Send bundled PS4Debug-NG payload", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+
                 if (result == DialogResult.Yes) return bundled;
                 if (result == DialogResult.Cancel) return null;
             }
+
             using (var dialog = new OpenFileDialog())
             {
                 dialog.Title = "Select firmware-compatible PS4 payload";
                 dialog.Filter = "PS4 payloads (*.bin;*.elf)|*.bin;*.elf|All files (*.*)|*.*";
                 dialog.CheckFileExists = true;
+
                 if (dialog.ShowDialog(this) != DialogResult.OK) return null;
+
                 string ext = Path.GetExtension(dialog.FileName);
                 if (!ext.Equals(".bin", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".elf", StringComparison.OrdinalIgnoreCase))
                 {
                     MetroFramework.MetroMessageBox.Show(this, "Choose a .bin or .elf payload.", "Unsupported payload", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return null;
                 }
+
                 if (new FileInfo(dialog.FileName).Length == 0)
                 {
                     MetroFramework.MetroMessageBox.Show(this, "The selected payload is empty.", "Invalid payload", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return null;
                 }
+
                 return dialog.FileName;
             }
         }
+
         public static bool Connect2PS4(string ip, string port)
         {
             try
@@ -124,31 +97,46 @@ namespace PS4_BO3_GSC
             string portText = ps4PortTextBox.Text.Trim();
             IPAddress address;
             int port;
+
             if (!IPAddress.TryParse(host, out address) || address.AddressFamily != AddressFamily.InterNetwork)
             {
-                connectionStatusLabel.Text = "Invalid PS4 IP"; connectionStatusLabel.ForeColor = Color.Red;
-                MetroFramework.MetroMessageBox.Show(this, "Enter the PS4 IPv4 address.", "Invalid IP", MessageBoxButtons.OK, MessageBoxIcon.Error); return;
+                connectionStatusLabel.Text = "Invalid PS4 IP";
+                connectionStatusLabel.ForeColor = Color.Red;
+                MetroFramework.MetroMessageBox.Show(this, "Enter the PS4 IPv4 address.", "Invalid IP", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
+
             if (!int.TryParse(portText, out port) || port < 1 || port > 65535)
             {
-                connectionStatusLabel.Text = "Invalid port"; connectionStatusLabel.ForeColor = Color.Red;
-                MetroFramework.MetroMessageBox.Show(this, "Enter a valid TCP port. GoldHEN BinLoader is typically 9090.", "Invalid port", MessageBoxButtons.OK, MessageBoxIcon.Error); return;
+                connectionStatusLabel.Text = "Invalid port";
+                connectionStatusLabel.ForeColor = Color.Red;
+                MetroFramework.MetroMessageBox.Show(this, "Enter a valid TCP port. GoldHEN BinLoader is typically 9090.", "Invalid port", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
+
             string payloadPath = choosePayloadFile();
             if (string.IsNullOrEmpty(payloadPath))
             {
-                connectionStatusLabel.Text = "Payload selection cancelled"; connectionStatusLabel.ForeColor = Color.DarkOrange; return;
+                connectionStatusLabel.Text = "Payload selection cancelled";
+                connectionStatusLabel.ForeColor = Color.DarkOrange;
+                return;
             }
+
             Properties.Settings.Default.ps4ip = host;
             Properties.Settings.Default.ps4Port = port.ToString();
             Properties.Settings.Default.Save();
+
             try
             {
-                connectionStatusLabel.Text = "Sending payload bytes..."; connectionStatusLabel.ForeColor = Color.DarkOrange;
+                connectionStatusLabel.Text = "Sending payload bytes...";
+                connectionStatusLabel.ForeColor = Color.DarkOrange;
+
                 if (!Connect2PS4(host, port.ToString())) throw new IOException("Could not connect to the payload listener.");
+
                 using (var stream = new FileStream(payloadPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    byte[] chunk = new byte[65536]; int count;
+                    byte[] chunk = new byte[65536];
+                    int count;
                     while ((count = stream.Read(chunk, 0, chunk.Length)) > 0)
                     {
                         int offset = 0;
@@ -160,17 +148,26 @@ namespace PS4_BO3_GSC
                         }
                     }
                 }
-                _psocket.Shutdown(SocketShutdown.Send); _psocket.Close(); pDConnected = false;
-                connectionStatusLabel.Text = "Payload bytes sent — verify on PS4"; connectionStatusLabel.ForeColor = Color.YellowGreen;
+
+                _psocket.Shutdown(SocketShutdown.Send);
+                _psocket.Close();
+                pDConnected = false;
+
+                connectionStatusLabel.Text = "Payload bytes sent — verify on PS4";
+                connectionStatusLabel.ForeColor = Color.YellowGreen;
+
                 MetroFramework.MetroMessageBox.Show(this, "Payload bytes were sent. This confirms transfer only, not payload execution or firmware compatibility. Check the PS4's status, then use Attach BO3.", "Transfer complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception err)
             {
                 try { if (_psocket != null) _psocket.Close(); } catch { }
-                pDConnected = false; connectionStatusLabel.Text = "Payload transfer failed"; connectionStatusLabel.ForeColor = Color.Red;
+                pDConnected = false;
+                connectionStatusLabel.Text = "Payload transfer failed";
+                connectionStatusLabel.ForeColor = Color.Red;
                 MetroFramework.MetroMessageBox.Show(this, err.Message, "Payload transfer failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
         private void attachBo3Button_Click(object sender, EventArgs e)
         {
             try
@@ -184,12 +181,14 @@ namespace PS4_BO3_GSC
                 connectionStatusLabel.ForeColor = Color.Red;
                 return;
             }
+
             if (!ps4.IsConnected)
             {
                 connectionStatusLabel.Text = "Connection Failed";
                 connectionStatusLabel.ForeColor = Color.Red;
                 return;
             }
+
             bool foundProcess = false;
             foreach (libdebug.Process process in ps4.GetProcessList().processes)
             {
@@ -200,24 +199,24 @@ namespace PS4_BO3_GSC
                     break;
                 }
             }
+
             if (!foundProcess)
             {
                 connectionStatusLabel.Text = "Process Not Found";
                 connectionStatusLabel.ForeColor = Color.Red;
                 return;
             }
+
             connectionStatusLabel.Text = "Connected + Attached";
             connectionStatusLabel.ForeColor = Color.Green;
-            browseCompiledGscFileButton.Enabled = true;
-            if (dumpMemoryButton != null) dumpMemoryButton.Enabled = true;
-            ps4.Notify(222, "Connected to DizzRL's BO3 GSC Injector!");
+            ps4.Notify(222, "Attached to BO3 - ready to dump!");
         }
 
         private async void DumpMemoryButton_Click(object sender, EventArgs e)
         {
             if (ps4 == null || attachedProcess == null || !ps4.IsConnected)
             {
-                MessageBox.Show(this, "Connect to PS4Debug-NG and attach to BO3 first.", "Not attached", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Send the payload and attach to BO3 first.", "Not attached", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -225,10 +224,11 @@ namespace PS4_BO3_GSC
             {
                 dialog.Description = "Choose an empty folder for the BO3 process memory dump. Dump size can be several GB.";
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
                 string root = Path.Combine(dialog.SelectedPath, "BO3_CUSA02290_memory_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
                 Directory.CreateDirectory(root);
-                dumpMemoryButton.Enabled = false;
                 Cursor = Cursors.WaitCursor;
+
                 try
                 {
                     await Task.Run(() => DumpProcessMemory(root, attachedProcess.pid));
@@ -241,7 +241,6 @@ namespace PS4_BO3_GSC
                 finally
                 {
                     Cursor = Cursors.Default;
-                    dumpMemoryButton.Enabled = (ps4 != null && ps4.IsConnected && attachedProcess != null);
                 }
             }
         }
@@ -251,6 +250,7 @@ namespace PS4_BO3_GSC
             // PS4Debug-NG maps are virtual address ranges. Dump only mappings with the
             // read permission bit set; record failures instead of aborting the entire dump.
             var map = ps4.GetProcessMaps(pid);
+
             string manifestPath = Path.Combine(outputDirectory, "dump_manifest.txt");
             using (var manifest = new StreamWriter(manifestPath, false, Encoding.UTF8))
             {
@@ -264,9 +264,11 @@ namespace PS4_BO3_GSC
 
                 int regionIndex = 0;
                 const int chunkSize = 1024 * 1024;
+
                 foreach (var entry in map.entries)
                 {
                     if (entry == null || entry.end <= entry.start) continue;
+
                     // FreeBSD/PS4 protection flags use bit 1 (PROT_READ) for readable mappings.
                     if ((entry.prot & 1) == 0)
                     {
@@ -279,8 +281,10 @@ namespace PS4_BO3_GSC
                     if (String.IsNullOrWhiteSpace(safeName)) safeName = "mapping";
                     string fileName = String.Format("region_{0:D4}_{1}_{2:X}_{3:X}.bin", regionIndex++, safeName, entry.start, entry.end);
                     string filePath = Path.Combine(outputDirectory, fileName);
+
                     long written = 0;
                     long failedBytes = 0;
+
                     using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, chunkSize))
                     {
                         for (ulong offset = 0; offset < length; offset += chunkSize)
@@ -303,261 +307,19 @@ namespace PS4_BO3_GSC
                             written += count;
                         }
                     }
+
                     manifest.WriteLine("REGION file={0} name={1} start=0x{2:X} end=0x{3:X} length={4} prot=0x{5:X} captured={6} zeroFilledFailed={7}", fileName, entry.name, entry.start, entry.end, length, entry.prot, written, failedBytes);
                     manifest.Flush();
                 }
+
                 manifest.WriteLine("END " + DateTime.Now.ToString("O"));
             }
-        }
-
-        private void browseGscFolderButton_Click(object sender, EventArgs e)
-        {
-            using (var fbd = new FolderBrowserDialog())
-            {
-                DialogResult result = fbd.ShowDialog();
-                if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(fbd.SelectedPath))
-                {
-                    gscProjectFolderTextBox.Text = fbd.SelectedPath;
-                }
-            }
-        }
-
-        private void browseOutputPathButton_Click(object sender, EventArgs e)
-        {
-            SaveFileDialog saveFileDialog = new SaveFileDialog();
-            saveFileDialog.Filter = "Compiled GSC Files (*.gscc)|*.gscc";
-            saveFileDialog.RestoreDirectory = true;
-            if (saveFileDialog.ShowDialog() == DialogResult.OK)
-            {
-                compiledGscFileOutputTextBox.Text = saveFileDialog.FileName;
-            }
-        }
-
-        private void compileGscProjectButton_Click(object sender, EventArgs e)
-        {
-            if (gscProjectFolderTextBox.Text == "" || compiledGscOutputLabel.Text == "")
-            {
-                MetroFramework.MetroMessageBox.Show(this, "Please select a gsc project folder and a location to save the compiled GSC file.", "Fill Out All Fields", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            List<string> conditionalSymbols = new List<string>();
-
-            if (File.Exists("gsc.conf"))
-            {
-                foreach (string line in File.ReadAllLines("gsc.conf"))
-                {
-                    if (line.Trim().StartsWith("#")) continue;
-                    var split = line.Trim().Split('=');
-                    if (split.Length < 2) continue;
-                    switch (split[0].ToLower().Trim())
-                    {
-                        case "symbols":
-                            foreach (string token in split[1].Trim().Split(','))
-                            {
-                                conditionalSymbols.Add(token);
-                            }
-                            break;
-                    }
-                }
-            }
-            string source = "";
-            CompiledCode code;
-            List<SourceTokenDef> sourceTokens = new List<SourceTokenDef>();
-            StringBuilder sb = new StringBuilder();
-            int currentLineCount = 0;
-            int currentCharCount = 0;
-            foreach (string file in Directory.EnumerateFiles(gscProjectFolderTextBox.Text, "*.gsc", SearchOption.AllDirectories).Where(x => x.EndsWith(".gsc", StringComparison.CurrentCultureIgnoreCase)))
-            {
-                var CurrentSource = new SourceTokenDef();
-                CurrentSource.FilePath = file.Replace(gscProjectFolderTextBox.Text, "").Substring(1).Replace("\\", "/");
-                CurrentSource.LineStart = currentLineCount;
-                CurrentSource.CharStart = currentCharCount;
-                foreach (var line in File.ReadAllLines(file))
-                {
-                    CurrentSource.LineMappings[currentLineCount] = (currentCharCount, currentCharCount + line.Length + 1);
-                    sb.Append(line);
-                    sb.Append("\n");
-                    currentLineCount += 1;
-                    currentCharCount += line.Length + 1;
-                }
-                CurrentSource.LineEnd = currentLineCount;
-                CurrentSource.CharEnd = currentCharCount;
-                sourceTokens.Add(CurrentSource);
-                sb.Append("\n");
-            }
-            source = sb.ToString();
-            var ppc = new ConditionalBlocks();
-            conditionalSymbols.Add("BO3");
-            ppc.LoadConditionalTokens(conditionalSymbols);
-
-            try
-            {
-                source = ppc.ParseSource(source);
-            }
-            catch (CBSyntaxException error)
-            {
-                int errorCharPos = error.ErrorPosition;
-                int numLineBreaks = 0;
-                foreach (var stok in sourceTokens)
-                {
-                    do
-                    {
-                        if (errorCharPos < stok.CharStart || errorCharPos > stok.CharEnd)
-                        {
-                            break;
-                        }
-                        errorCharPos -= numLineBreaks;
-                        foreach (var line in stok.LineMappings)
-                        {
-                            var constraints = line.Value;
-                            if (errorCharPos < constraints.CStart || errorCharPos > constraints.CEnd)
-                            {
-                                continue;
-                            }
-                            MetroFramework.MetroMessageBox.Show(this, $"There was an error compiling your GSC Project\n{error.Message} in scripts/{stok.FilePath} at line {line.Key - stok.LineStart}, position {errorCharPos - constraints.CStart}", "Compiler Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return;
-                        }
-                    }
-                    while (false);
-                    numLineBreaks++;
-                }
-                MetroFramework.MetroMessageBox.Show(this, "There was an error compiling your GSC Project.", "Compiler Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            code = Compiler.Compile(false, source);
-            if (code.Error != null && code.Error.Length > 0)
-            {
-                MetroFramework.MetroMessageBox.Show(this, "There was an error compiling your GSC Project.", "Compiler Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            File.WriteAllBytes(compiledGscFileOutputTextBox.Text, code.CompiledScript);
-            MetroFramework.MetroMessageBox.Show(this, $"Your compiled gsc file has been exported to {compiledGscFileOutputTextBox.Text}! Enjoy :)", "Compile Success!", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        private void browseCompiledGscFileButton_Click(object sender, EventArgs e)
-        {
-            using (var fd = new OpenFileDialog())
-            {
-                fd.Filter = "Compiled GSC FIles (*.gscc)|*.gscc";
-                DialogResult result = fd.ShowDialog();
-                compiledGscFileTextBox.Text = fd.FileName;
-            }
-        }
-
-        private void injectGscButton_Click(object sender, EventArgs e)
-        {
-            if (ps4 == null || attachedProcess == null)
-            {
-                MetroFramework.MetroMessageBox.Show(this, "Make sure to connect your PS4 with Black Ops 3 running.", "Not Connected", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            if (compiledGscFileTextBox.Text == "")
-            {
-                MetroFramework.MetroMessageBox.Show(this, "Please select a compiled GSC file to inject (.gscc)", "Select Compiled GSCC File", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            byte[] buffer = null;
-            try
-            {
-                buffer = File.ReadAllBytes(compiledGscFileTextBox.Text);
-            }
-            catch
-            {
-                MetroFramework.MetroMessageBox.Show(this, "Could not read compiled gsc file, make sure it still exists.", "Couldn't Read File", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            ulong dupGscAddress = (ulong)selectedGameVersion;
-            var filePointerAddress = ps4.ReadMemory<ulong>(attachedProcess.pid, dupGscAddress + 0x10);
-            int checksum = ps4.ReadMemory<int>(attachedProcess.pid, filePointerAddress + 0x8);
-            BitConverter.GetBytes(checksum).CopyTo(buffer, 0x8);
-            var newGscFileAddress = ps4.AllocateMemory(attachedProcess.pid, buffer.Length);
-            ps4.WriteMemory(attachedProcess.pid, newGscFileAddress, buffer);
-            ps4.WriteMemory(attachedProcess.pid, dupGscAddress + 0x10, newGscFileAddress);
-            ps4.Notify(222, "GSC Script injected!");
         }
 
         private void connectPS4Button_EnabledChanged(object sender, EventArgs e)
         {
             Button btn = (Button)sender;
             btn.BackColor = Color.FromArgb(211, 211, 211);
-        }
-
-        private void oneThreeThreeRadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            RadioButton radioButton = (RadioButton)sender;
-            if (radioButton.Checked)
-            {
-                selectedGameVersion = Enums.GameVersion.OneThreeThree;
-            }
-        }
-
-        private void oneTwoSixRadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            RadioButton radioButton = (RadioButton)sender;
-            if (radioButton.Checked)
-            {
-                selectedGameVersion = Enums.GameVersion.OneTwoSix;
-            }
-        }
-
-        private void fiveOFiveRadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            RadioButton radioButton = (RadioButton)sender;
-            if (radioButton.Checked)
-                updateConsoleVersion(Enums.ConsoleVersion.fiveOFive);
-
-        }
-
-        private void sixSevenTwoRadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            RadioButton radioButton = (RadioButton)sender;
-            if (radioButton.Checked)
-                updateConsoleVersion(Enums.ConsoleVersion.sixSevenTwo);
-        }
-
-        private void sevenOTwoRadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            RadioButton radioButton = (RadioButton)sender;
-            if (radioButton.Checked)
-                updateConsoleVersion(Enums.ConsoleVersion.sevenOTwo);
-        }
-
-        private void sevenFiveFiveRadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            RadioButton radioButton = (RadioButton)sender;
-            if (radioButton.Checked)
-                updateConsoleVersion(Enums.ConsoleVersion.sevenFiveFive);
-        }
-
-        private void firmware1300RadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            if (firmware1300RadioButton.Checked)
-                updateConsoleVersion(Enums.ConsoleVersion.firmware1300);
-        }
-
-        private void firmware1302RadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            if (firmware1302RadioButton.Checked)
-                updateConsoleVersion(Enums.ConsoleVersion.firmware1302);
-        }
-
-        private void firmware1350RadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            if (firmware1350RadioButton.Checked)
-                updateConsoleVersion(Enums.ConsoleVersion.firmware1350);
-        }
-
-        private void firmware1352RadioButton_CheckedChanged(object sender, EventArgs e)
-        {
-            if (firmware1352RadioButton.Checked)
-                updateConsoleVersion(Enums.ConsoleVersion.firmware1352);
-        }
-
-        private void updateConsoleVersion(Enums.ConsoleVersion consoleVersion)
-        {
-            Properties.Settings.Default.ps4Version = (int)consoleVersion;
-            Properties.Settings.Default.Save();
-            this.selectedConsoleVersion = consoleVersion;
         }
     }
 }
