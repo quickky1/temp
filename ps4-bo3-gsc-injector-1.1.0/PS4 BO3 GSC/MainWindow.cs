@@ -46,7 +46,7 @@ namespace PS4_BO3_GSC
         private void MainWindow_Load(object sender, EventArgs e)
         {
             // Build stamp: proves which code is actually running on the PC.
-            this.Text = this.Text + " [build 2026-09-28g]";
+            this.Text = this.Text + " [build 2026-09-28h]";
             ps4IpTextBox.Text = Properties.Settings.Default.ps4ip;
             ps4PortTextBox.Text = Properties.Settings.Default.ps4Port;
             if (string.IsNullOrWhiteSpace(ps4PortTextBox.Text))
@@ -363,7 +363,6 @@ namespace PS4_BO3_GSC
 
                 string root = Path.Combine(dialog.SelectedPath, "BO3_CUSA02290_memory_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
                 Directory.CreateDirectory(root);
-                Cursor = Cursors.WaitCursor;
 
                 try
                 {
@@ -373,10 +372,6 @@ namespace PS4_BO3_GSC
                 catch (Exception ex)
                 {
                     MessageBox.Show(this, "Dump stopped: " + ex.Message + "\r\nAny completed region files and the manifest are retained.", "Dump error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-                finally
-                {
-                    Cursor = Cursors.Default;
                 }
             }
         }
