@@ -315,14 +315,12 @@ namespace libdebug
 				{
 					byte[] b = new byte[NET_MAX_LENGTH];
 					recv = sock.Receive(b, NET_MAX_LENGTH, SocketFlags.None);
-					if (recv <= 0) throw new IOException("PS4 closed the connection during the transfer.");
 					s.Write(b, 0, recv);
 				}
 				else
 				{
 					byte[] b = new byte[left];
 					recv = sock.Receive(b, left, SocketFlags.None);
-					if (recv <= 0) throw new IOException("PS4 closed the connection during the transfer.");
 					s.Write(b, 0, recv);
 				}
 
