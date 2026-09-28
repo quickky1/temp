@@ -124,8 +124,8 @@ namespace PS4_BO3_GSC
             "13.20",
             "13.40",
             "13.42",
-            "13.52",
-            "13.60"});
+            "13.50",
+            "13.52"});
             this.firmwareComboBox.Location = new System.Drawing.Point(76, 98);
             this.firmwareComboBox.Name = "firmwareComboBox";
             this.firmwareComboBox.Size = new System.Drawing.Size(120, 29);

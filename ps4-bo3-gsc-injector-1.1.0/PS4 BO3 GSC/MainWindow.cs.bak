@@ -33,16 +33,29 @@ namespace PS4_BO3_GSC
                 ps4PortTextBox.Text = "9090";
         }
 
-        // Prefer the supplied PS4Debug-NG payload. If it is not beside the app, allow selecting a compatible payload manually.
+        // Pick the payload matching the selected firmware. Classic per-firmware builds
+        // cover 5.05 - 7.55; the PS4Debug-NG binary auto-detects 9.00+.
         private string choosePayloadFile()
         {
-            string bundled = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Payloads", "ps4debug-ng_v1.3.2_release_2026-09-20.bin");
+            string firmware = GetSelectedFirmware();
+            string relativePath;
+            switch (firmware)
+            {
+                case "5.05": relativePath = Path.Combine("5_05", "ps4debug.bin"); break;
+                case "6.72": relativePath = Path.Combine("6_72", "ps4debug.bin"); break;
+                case "7.02": relativePath = Path.Combine("7_02", "ps4debug.bin"); break;
+                case "7.55": relativePath = Path.Combine("7_55", "ps4debug.bin"); break;
+                default: relativePath = Path.Combine("GoldHEN-13.50", "ps4debug-ng_v1.3.2_release_2026-09-20.bin"); break;
+            }
+
+            string displayFirmware = firmware.StartsWith("unknown") ? "9.00+ (auto-detect)" : firmware;
+            string bundled = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Payloads", relativePath);
 
             if (File.Exists(bundled) && new FileInfo(bundled).Length > 0)
             {
                 var result = MetroFramework.MetroMessageBox.Show(this,
-                    "Use the bundled PS4Debug-NG v1.3.2 payload?\r\n\r\n" + bundled + "\r\n\r\nThis payload auto-detects the PS4 firmware when it loads (supports 3.xx - 13.xx). Sending it to GoldHEN's listener does not guarantee it starts; check the PS4 notification and then attach.",
-                    "Send bundled PS4Debug-NG payload", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                    "Send payload for firmware " + displayFirmware + "?\r\n\r\n" + bundled + "\r\n\r\nThe 9.00+ binary auto-detects the firmware when it loads. Sending bytes to GoldHEN's listener does not guarantee it starts; check the PS4 notification and then attach.",
+                    "Send payload", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 
                 if (result == DialogResult.Yes) return bundled;
                 if (result == DialogResult.Cancel) return null;
@@ -191,7 +204,7 @@ namespace PS4_BO3_GSC
                 connectionStatusLabel.Text = "Firmware detect failed";
                 connectionStatusLabel.ForeColor = Color.Red;
                 MetroFramework.MetroMessageBox.Show(this,
-                    "Could not read the firmware from the PS4 (port 744).\r\n\r\n" + ex.Message + "\r\n\r\nSend the payload first and confirm the PS4 shows its notification, then try Detect Firmware again.",
+                    "Could not read the firmware from the PS4 (port 744).\r\n\r\n" + ex.Message + "\r\n\r\nAuto-detect needs the PS4Debug-NG payload running (9.00+). For 5.05 - 7.55 classic payloads, pick the firmware from the list manually.\r\n\r\nOtherwise: send the payload first and confirm the PS4 shows its notification, then try Detect Firmware again.",
                     "Firmware detection failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }

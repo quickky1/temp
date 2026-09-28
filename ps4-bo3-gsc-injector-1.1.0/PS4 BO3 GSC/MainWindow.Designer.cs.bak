@@ -95,6 +95,10 @@ namespace PS4_BO3_GSC
             this.firmwareComboBox.FormattingEnabled = true;
             this.firmwareComboBox.ItemHeight = 23;
             this.firmwareComboBox.Items.AddRange(new object[] {
+            "5.05",
+            "6.72",
+            "7.02",
+            "7.55",
             "9.00",
             "9.05",
             "9.20",
@@ -116,9 +120,11 @@ namespace PS4_BO3_GSC
             "12.60",
             "12.70",
             "13.00",
+            "13.02",
             "13.20",
             "13.40",
             "13.42",
+            "13.52",
             "13.60"});
             this.firmwareComboBox.Location = new System.Drawing.Point(76, 98);
             this.firmwareComboBox.Name = "firmwareComboBox";
