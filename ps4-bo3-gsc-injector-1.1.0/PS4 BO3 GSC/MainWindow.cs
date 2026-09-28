@@ -562,4 +562,6 @@ namespace PS4_BO3_GSC
             Button btn = (Button)sender;
             btn.BackColor = Color.FromArgb(211, 211, 211);
         }
+    }
+}
  

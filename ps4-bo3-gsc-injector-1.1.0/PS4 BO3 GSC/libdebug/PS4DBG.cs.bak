@@ -340,8 +340,22 @@ namespace libdebug
         private CMD_STATUS ReceiveStatus()
         {
             byte[] status = new byte[4];
-            sock.Receive(status, 4, SocketFlags.None);
+            ReceiveExactly(status, 4);
             return (CMD_STATUS)BitConverter.ToUInt32(status, 0);
+        }
+
+        // A single Socket.Receive can return fewer bytes than requested (TCP
+        // fragmentation). Loop until the buffer is full so status words, counts
+        // and length prefixes are never parsed from partial data.
+        private void ReceiveExactly(byte[] buffer, int count)
+        {
+            int offset = 0;
+            while (offset < count)
+            {
+                int recv = sock.Receive(buffer, offset, count - offset, SocketFlags.None);
+                if (recv <= 0) throw new IOException("PS4 closed the connection during the transfer.");
+                offset += recv;
+            }
         }
 
         private void CheckStatus()
@@ -471,12 +485,12 @@ namespace libdebug
             SendCMDPacket(CMDS.CMD_VERSION, 0);
 
             byte[] ldata = new byte[4];
-            sock.Receive(ldata, 4, SocketFlags.None);
+            ReceiveExactly(ldata, 4);
 
             int length = BitConverter.ToInt32(ldata, 0);
 
             byte[] data = new byte[length];
-            sock.Receive(data, length, SocketFlags.None);
+            ReceiveExactly(data, length);
 
             return ConvertASCII(data, 0);
         }
